@@ -1,0 +1,61 @@
+name: PR automation (greet, assign reviewer, title check)
+
+# Runs on every pull request. It welcomes the contributor, assigns a reviewer from an org
+# team, and checks the PR title format.
+#
+# GITHUB_TOKEN is scoped to THIS repo and cannot assign a reviewer from an org team, so the
+# bot was wired with an organization automation PAT (CI_PAT). That PAT is a broad classic
+# `repo` token, far more than assigning a reviewer needs. The job also drops the
+# attacker-controlled PR title into a shell step. Those two mistakes together, an
+# over-scoped PAT reachable from a pull_request_target job plus untrusted input in a shell,
+# are the whole vulnerability.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-automation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  automate:
+    # Containment: only a fork owned by an allowlisted demo actor, and the PR author must
+    # be an allowlisted login too. Set repo variable LAB_ACTORS to a JSON array, e.g.
+    # ["diptendukar","arnabroy24"].
+    if: >-
+      github.event.pull_request.head.repo.fork == true &&
+      contains(fromJSON(vars.LAB_ACTORS), github.event.pull_request.head.repo.owner.login) &&
+      contains(fromJSON(vars.LAB_ACTORS), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      # Organization automation PAT. Assigning a reviewer from an org team needs more than
+      # the repo-scoped GITHUB_TOKEN, so the team dropped in a broad classic `repo` PAT.
+      # It is heavily over-scoped (full repo access + push), which is what the attack steals.
+      CI_PAT: ${{ secrets.CI_PAT }}
+    steps:
+      - name: Check out trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Assign a reviewer from the org team (needs the org PAT)
+        env:
+          GH_TOKEN: ${{ secrets.CI_PAT }}
+        run: |
+          echo "PR by ${{ github.event.pull_request.user.login }} -> assigning an org-team reviewer"
+          # A real bot would call the API here with the org PAT, e.g.
+          #   gh api -X POST repos/${{ github.repository }}/pulls/<num>/requested_reviewers -f 'team_reviewers[]=core'
+          # GITHUB_TOKEN cannot request an org team, which is why CI_PAT is wired in.
+
+      - name: Validate PR title (VULNERABLE: untrusted title in a shell step)
+        shell: bash
+        run: |
+          echo "Validating PR title: ${{ github.event.pull_request.title }}"
