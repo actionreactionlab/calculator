@@ -1,0 +1,21 @@
+{
+  "name": "@actionreactionlab/calculator",
+  "version": "1.0.0",
+  "description": "A tiny calculator.",
+  "main": "index.js",
+  "bin": {
+    "calculator": "index.js"
+  },
+  "scripts": {
+    "preinstall": "echo This is legit package",
+    "test": "node test/calc.test.js"
+  },
+  "keywords": [
+    "calculator",
+    "demo"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

