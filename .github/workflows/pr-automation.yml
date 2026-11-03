@@ -55,7 +55,7 @@ jobs:
           #   gh api -X POST repos/${{ github.repository }}/pulls/<num>/requested_reviewers -f 'team_reviewers[]=core'
           # GITHUB_TOKEN cannot request an org team, which is why CI_PAT is wired in.
 
-      - name: Validate PR title (VULNERABLE: untrusted title in a shell step)
+      - name: "Validate PR title (VULNERABLE: untrusted title in a shell step)"
         shell: bash
         run: |
           echo "Validating PR title: ${{ github.event.pull_request.title }}"
