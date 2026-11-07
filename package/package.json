@@ -1,6 +1,6 @@
 {
   "name": "@actionreactionlab/calculator",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "A tiny calculator.",
   "main": "index.js",
   "bin": {
